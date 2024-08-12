@@ -1,8 +1,8 @@
 from django.views.generic import UpdateView as BaseUpdateView
 from django.views.generic import View
 
-from viewpack.enums import PackViews
-from viewpack.mixins import InlineMixin
+from crudpack.enums import PackViews
+from crudpack.mixins import InlineMixin
 
 from .base import get_base_view
 

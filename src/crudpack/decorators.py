@@ -5,10 +5,10 @@ def register(model):
     """
     @register(Author)
     @register('app.Model')
-    class AuthorPack(viewpack.ModelPack):
+    class AuthorPack(crudpack.ModelPack):
         pass
     """
-    from viewpack import ModelPack, packs
+    from crudpack import ModelPack, packs
 
     def _model_pack_wrapper(pack_cls):
         if not model:

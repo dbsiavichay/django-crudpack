@@ -1,7 +1,7 @@
 from django.views.generic import DeleteView as BaseDeleteView
 from django.views.generic import View
 
-from viewpack.enums import PackViews
+from crudpack.enums import PackViews
 
 from .base import get_base_view
 

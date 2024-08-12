@@ -4,7 +4,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.forms import BaseModelForm
 from django.forms.models import ModelFormMetaclass as DjangoModelFormMetaclass
 
-from viewpack.services import FieldService
+from crudpack.services import FieldService
 
 
 class ModelFormMetaclass(DjangoModelFormMetaclass):

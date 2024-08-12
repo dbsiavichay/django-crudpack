@@ -1,8 +1,8 @@
 from django.apps import AppConfig
 
 
-class ViewPackConfig(AppConfig):
-    name = "viewpack"
+class CrudPackConfig(AppConfig):
+    name = "crudpack"
 
     def ready(self):
         self.module.autodiscover()
