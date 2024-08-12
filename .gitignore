@@ -1,0 +1,6 @@
+*~
+*.py[cod]
+.*
+!.gitignore
+!.dockerignore
+__pycache__/

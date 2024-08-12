@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-viewpack"
+version = "0.0.1"
+authors = [
+  { name="Denis Siavichay", email="dbsiavichay@gmail.com" },
+]
+description = "Utility for simplify django cruds"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/dbsiavichay/django-viewpack"
+Issues = "https://github.com/dbsiavichay/django-viewpack/issues"
