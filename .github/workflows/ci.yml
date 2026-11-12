@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Ruff check
+        run: uv run --locked ruff check .
+      - name: Ruff format
+        run: uv run --locked ruff format --check .
+
+  test:
+    name: test (Python ${{ matrix.python }}, Django ${{ matrix.django }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Python versions supported by each Django release.
+          - { django: "5.2", python: "3.10" }
+          - { django: "5.2", python: "3.11" }
+          - { django: "5.2", python: "3.12" }
+          - { django: "5.2", python: "3.13" }
+          - { django: "5.2", python: "3.14" }
+          - { django: "6.0", python: "3.12" }
+          - { django: "6.0", python: "3.13" }
+          - { django: "6.0", python: "3.14" }
+          - { django: "6.1", python: "3.12" }
+          - { django: "6.1", python: "3.13" }
+          - { django: "6.1", python: "3.14" }
+          - { django: "6.1", python: "3.15" }
+    env:
+      DJANGO_REQUIREMENT: django~=${{ matrix.django }}.0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Show versions
+        run: uv run --locked --isolated --with "$DJANGO_REQUIREMENT" python -c "import django, sys; print(sys.version); print('Django', django.get_version())"
+      - name: Run tests
+        run: uv run --locked --isolated --with "$DJANGO_REQUIREMENT" pytest --cov --cov-report=term-missing
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Check distributions
+        run: uvx twine check --strict dist/*
