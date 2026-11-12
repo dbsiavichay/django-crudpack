@@ -5,3 +5,7 @@
 !.dockerignore
 !.github
 __pycache__/
+dist/
+build/
+*.egg-info/
+htmlcov/
