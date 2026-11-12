@@ -1,0 +1,3 @@
+<form method="post">{{ form.as_p }}
+{% for name, inline in pack_info.inlines.items %}{{ inline.formset.management_form }}{% for f in inline.formset %}{{ f.as_p }}{% endfor %}{{ inline.non_form_errors }}{% endfor %}
+</form>

@@ -1,164 +1,155 @@
-from functools import reduce
-
-from django.contrib.admin.utils import flatten
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models.base import ModelBase
+from django.db.models import Model
+from django.db.models.fields.files import FieldFile
+from django.db.models.manager import BaseManager
 from django.forms.utils import pretty_name
-from django.utils.html import format_html
+
+LOOKUP_SEP = "__"
+STR_FIELD = "__str__"
+
+
+def flatten(items):
+    """Flatten one level of nesting: ``("a", ("b", "c"))`` -> ``["a", "b", "c"]``."""
+    if isinstance(items, str):
+        return [items]
+
+    result = []
+
+    for item in items:
+        if isinstance(item, (list, tuple)):
+            result.extend(item)
+        else:
+            result.append(item)
+
+    return result
 
 
 class FieldService:
-    JSON_SPLITTER = "__"
-
-    pack = None
+    """Resolve labels and values of the fields shown by the list and detail views."""
 
     def __init__(self, pack):
         self.pack = pack
 
-    @classmethod
-    def get_flatten_field_names(cls, field_names):
+    @staticmethod
+    def get_flatten_field_names(field_names):
         if isinstance(field_names, dict):
-            field_names = reduce(
-                lambda accumulator, names: accumulator + flatten(names),
-                field_names.values(),
-                [],
-            )
+            return [name for rows in field_names.values() for name in flatten(rows)]
+
+        return flatten(field_names)
+
+    @staticmethod
+    def get_bootstrap_fields(rows, fields_data):
+        """Group ``fields_data`` in rows, adding the Bootstrap column width."""
+        if isinstance(rows, str):
+            rows = (rows,)
+
+        result = []
+
+        for row in rows:
+            row = row if isinstance(row, (list, tuple)) else (row,)
+            cols = 12 // len(row)
+            result.append({name: {**fields_data[name], "cols": cols} for name in row})
+
+        return result
+
+    def get_field_label(self, field_name):
+        labels = self.pack.default_labels
+
+        if field_name in labels:
+            return labels[field_name]
+
+        model = self.pack.model
+
+        if field_name == STR_FIELD:
+            return pretty_name(model._meta.verbose_name)
+
+        names = field_name.split(LOOKUP_SEP)
+
+        if len(names) == 1:
+            try:
+                return pretty_name(model._meta.get_field(field_name).verbose_name)
+            except (FieldDoesNotExist, AttributeError):
+                pass
+
+        return pretty_name(names[-1])
+
+    def get_field_data(self, obj, field_name):
+        if field_name == STR_FIELD:
+            value, field_type = obj, type(obj).__name__.lower()
         else:
-            field_names = flatten(field_names)
+            value, field_type = self._resolve(obj, field_name.split(LOOKUP_SEP))
 
-        return field_names
+        return {
+            "value": value,
+            "label": self.get_field_label(field_name),
+            "type": field_type,
+        }
 
-    @classmethod
-    def get_botstrap_fields(cls, field_names, fields_data):
-        def wrap(fields):
-            fields = fields if isinstance(fields, (list, tuple)) else (fields,)
-            cols = int(12 / len(fields))
-            result = {field: fields_data.get(field) for field in fields}
+    def _resolve(self, obj, names):
+        name, *rest = names
+        field = None
 
-            for value in result.values():
-                value.update({"cols": cols})
+        if isinstance(obj, dict):
+            value = obj.get(name)
+        else:
+            if not hasattr(obj, name):
+                raise AttributeError(
+                    f"{type(obj).__name__} has no attribute {name!r} ({obj!r})."
+                )
 
-            return result
+            if isinstance(obj, Model):
+                try:
+                    field = obj._meta.get_field(name)
+                except FieldDoesNotExist:
+                    field = None
 
-        data = list(map(wrap, field_names))
+            if field is not None and getattr(field, "choices", None) and not rest:
+                value = getattr(obj, f"get_{field.name}_display")()
+            else:
+                value = getattr(obj, name)
 
-        return data
+                if callable(value) and not isinstance(value, BaseManager):
+                    value = value()
 
-    def _get_field_label(self, field_name):
-        label = self.pack.default_labels.get(field_name)
+        if rest:
+            if value is None:
+                return None, "nonetype"
 
-        if label:
-            return pretty_name(label)
+            return self._resolve(value, rest)
 
-        if "__str__" in field_name:
-            label = self.pack.model._meta.verbose_name
-            return pretty_name(label)
+        if isinstance(value, FieldFile):
+            value = {"name": value.name, "url": value.url} if value else None
 
-        names = field_name.split(self.JSON_SPLITTER)
-        name = names.pop(0)
+        field_type = field.get_internal_type() if field else type(value).__name__
 
-        try:
-            field = self.pack.model._meta.get_field(name)
-            label = field.verbose_name
-        except FieldDoesNotExist:
-            label = field_name
+        return value, field_type.lower()
 
-        return pretty_name(label)
-
-    def _get_field_data(self, obj, large_field_name, field_name):
-        if "__str__" == field_name:
-            return {
-                "value": obj,
-                "label": self._get_field_label(large_field_name),
-                "type": type(obj).__name__,
-            }
-
-        names = field_name.split(self.JSON_SPLITTER)
-        name = names.pop(0)
-        has_attr = name in obj if isinstance(obj, dict) else hasattr(obj, name)
-
-        if not has_attr:
-            raise AttributeError(
-                "Does not exist attribute <{0}> for {1}".format(field_name, str(obj))
-            )
-
-        value = obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
-        value = value() if callable(value) else value
-        is_file = hasattr(value, "field") and value.field.get_internal_type() in [
-            "FileField",
-            "ImageField",
-        ]
-
-        if is_file:
-            value = {"name": value.name, "url": value.url} if bool(value) else None
-
-        if len(names) and isinstance(value, dict):
-            return self._get_field_data(
-                value, large_field_name, self.JSON_SPLITTER.join(names)
-            )
-
-        try:
-            field = obj._meta.get_field(name)
-            internal_type = field.get_internal_type()
-
-            if hasattr(field, "choices") and field.choices:
-                value = dict(field.choices).get(value)
-        except (FieldDoesNotExist, AttributeError):
-            value = format_html(value)
-            internal_type = type(value).__name__
-
-        label = self._get_field_label(large_field_name)
-        internal_type = internal_type.lower()
-
-        return {"value": value, "label": label, "type": internal_type}
-
-    def _get_data(self, instance_or_queryset, field_names):
-        if isinstance(type(instance_or_queryset), ModelBase):
-            instance_or_queryset = [instance_or_queryset]
-
-        data = [
+    def _get_data(self, instances, field_names):
+        return [
             (
                 instance,
-                {
-                    field_name: self._get_field_data(instance, field_name, field_name)
-                    for field_name in field_names
-                },
+                {name: self.get_field_data(instance, name) for name in field_names},
             )
-            for instance in instance_or_queryset
+            for instance in instances
         ]
 
-        return data
+    def get_list_data(self, instances):
+        return self._get_data(instances, self.pack.list_fields)
 
-    def get_list_data(self, instance_or_queryset):
-        return self._get_data(instance_or_queryset, self.pack.list_fields)
-
-    def get_detail_data(self, instance_or_queryset):
-        field_names = self.get_flatten_field_names(self.pack.detail_fields)
-        data = self._get_data(instance_or_queryset, field_names) or {}
-
-        if len(data):
-            _, data = data[0]
-
-        field_names = self.pack.detail_fields
-
-        if not field_names:
-            field_names = data.keys()
+    def get_detail_data(self, instance):
+        detail_fields = self.pack.detail_fields
+        field_names = self.get_flatten_field_names(detail_fields)
+        _, data = self._get_data([instance], field_names)[0]
 
         fieldsets = (
-            field_names.items()
-            if isinstance(field_names, dict)
-            else [("", field_names)]
+            detail_fields.items()
+            if isinstance(detail_fields, dict)
+            else [("", detail_fields)]
         )
 
         bs_data = [
-            {
-                "title": title,
-                "fieldset": self.get_botstrap_fields(
-                    fieldset,
-                    data,
-                ),
-            }
-            for title, fieldset in fieldsets
+            {"title": title, "fieldset": self.get_bootstrap_fields(rows, data)}
+            for title, rows in fieldsets
         ]
 
         return data, bs_data

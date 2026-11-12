@@ -1,0 +1,1 @@
+{% for fieldset in pack_info.bs_fieldsets %}<fieldset><legend>{{ fieldset.title }}</legend>{% for row in fieldset.fieldset %}{% for name, field in row.items %}<div class="col-{{ field.cols }}">{{ field.label }}: {{ field.value }}</div>{% endfor %}{% endfor %}</fieldset>{% endfor %}

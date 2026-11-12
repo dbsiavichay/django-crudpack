@@ -1,0 +1,7 @@
+<h1>{{ pack_info.title }}</h1>
+<a href="{{ pack_info.paths.create }}">create</a>
+<table>
+<tr>{% for name, label in pack_info.headers.items %}<th>{{ label }}</th>{% endfor %}</tr>
+{% for instance, row in pack_info.rows %}<tr>{% for name, field in row.data.items %}<td>{{ field.value }}</td>{% endfor %}<td><a href="{{ row.paths.detail }}">detail</a></td></tr>
+{% endfor %}</table>
+<p>{{ pack_info.start_index }}-{{ pack_info.end_index }} of {{ pack_info.count }}</p>
