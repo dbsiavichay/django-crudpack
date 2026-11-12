@@ -1,26 +1,22 @@
-from django.views.generic import ListView as BaseListView
-from django.views.generic import View
-
-from crudpack.enums import PackViews
 from crudpack.services import FieldService
-
-from .base import get_base_view
 
 
 class ListMixin:
-    name = PackViews.LIST
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        pack_info = context.get("pack_info", {})
-        object_list = context.get("object_list")
-        object_list_count = object_list.count()
-        is_paginated = context.get("is_paginated")
-        paginator = context.get("paginator")
+        object_list = context["object_list"]
         page_obj = context.get("page_obj")
-        start_index = page_obj.start_index() if is_paginated else 1
-        end_index = page_obj.end_index() if is_paginated else object_list_count
-        count = paginator.count if is_paginated else object_list_count
+
+        if page_obj is not None:
+            start_index = page_obj.start_index()
+            end_index = page_obj.end_index()
+            count = page_obj.paginator.count
+        else:
+            count = len(object_list)
+            start_index = 1 if count else 0
+            end_index = count
+
+        pack_info = context.setdefault("pack_info", {})
         pack_info.update(
             {
                 **self.get_fields_data(object_list),
@@ -29,17 +25,16 @@ class ListMixin:
                 "count": count,
             }
         )
-        context["pack_info"] = pack_info
 
         return context
 
-    def get_fields_data(self, queryset):
+    def get_fields_data(self, object_list):
         service = FieldService(self.pack)
-        data = service.get_list_data(queryset)
+        data = service.get_list_data(object_list)
 
         return {
             "headers": {
-                name: service._get_field_label(name) for name in self.pack.list_fields
+                name: service.get_field_label(name) for name in self.pack.list_fields
             },
             "rows": self.get_rows(data),
         }
@@ -51,25 +46,14 @@ class ListMixin:
         ]
 
     def get_paginate_by(self, queryset):
-        paginate_by = self.request.GET.get("paginate_by")
+        paginate_by = super().get_paginate_by(queryset)
 
-        if paginate_by:
+        try:
+            requested = int(self.request.GET["paginate_by"])
+        except (KeyError, ValueError):
             return paginate_by
 
-        return super().get_paginate_by(queryset)
+        if requested < 1:
+            return paginate_by
 
-
-class ListView(View):
-    pack = None
-
-    def view(self, request, *args, **kwargs):
-        mixins = [ListMixin]
-        View = get_base_view(BaseListView, mixins, self.pack)
-        View.paginate_by = self.pack.paginate_by
-        View.__bases__ = (*self.pack.list_mixins, *View.__bases__)
-        view = View.as_view()
-
-        return view(request, *args, **kwargs)
-
-    def dispatch(self, request, *args, **kwargs):
-        return self.view(request, *args, **kwargs)
+        return min(requested, self.pack.max_paginate_by)

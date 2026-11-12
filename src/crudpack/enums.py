@@ -2,24 +2,15 @@ from enum import Enum
 
 
 class PackViews(Enum):
+    """The views a ``ModelPack`` can expose."""
+
     LIST = "list"
     CREATE = "create"
     UPDATE = "update"
     DETAIL = "detail"
     DELETE = "delete"
 
-
-def set_enum():
-    for enum in PackViews:
-        enum.suffix = enum.value
-        enum.kwarg = ""
-        enum.param = ""
-
-        if enum not in (PackViews.LIST, PackViews.CREATE):
-            enum.kwarg = "{id}"
-            enum.param = "<int:pk>"
-
-    PackViews.LIST.suffix = ""
-
-
-set_enum()
+    @property
+    def is_object_view(self):
+        """Whether the view works on a single object, so its URL needs a pk."""
+        return self in (PackViews.UPDATE, PackViews.DETAIL, PackViews.DELETE)
